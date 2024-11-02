@@ -44,12 +44,12 @@ module.exports = {
 		}
 		return new Promise(function (resolve, reject) {
 			// TODO: reject promise ?
-			glob(context.opts.projectRoot+providedTranslationPathPattern, {posix: true}).forEach(function (langFile) {
-				var matches = langFile.match(providedTranslationPathRegex);
+			glob(providedTranslationPathPattern, {withFileTypes: true}).forEach(function (langFile) {
+				var matches = langFile.fullpathPosix().match(providedTranslationPathRegex);
 				if (matches) {
 					targetLangArr.push({
 						lang: matches[1],
-						path: langFile,
+						path: langFile.fullpathPosix(),
 					});
 				}
 			});
