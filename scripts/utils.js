@@ -42,6 +42,9 @@ module.exports = {
 				providedTranslationPathRegex = new RegExp(PATH + "(.*).json");
 			}
 		}
+
+		providedTranslationPathPattern = providedTranslationPathPattern.replace(/^\//, '');
+
 		return new Promise(function (resolve, reject) {
 			// TODO: reject promise ?
 			glob(providedTranslationPathPattern, {withFileTypes: true}).forEach(function (langFile) {
