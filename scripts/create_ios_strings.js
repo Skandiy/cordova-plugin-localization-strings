@@ -7,6 +7,7 @@ var utils = require("./utils");
 
 var iosProjFolder;
 var iosPbxProjPath;
+var _context;
 
 function jsonToDotStrings(jsonObj) {
 	var returnString = "";
@@ -17,12 +18,30 @@ function jsonToDotStrings(jsonObj) {
 }
 
 function getProjectName() {
-	var config = fs.readFileSync("config.xml").toString();
-	var matches = config.match(new RegExp("<name>(.*?)</name>", "i"));
+	if(_context.opts.cordova.platforms.indexOf('ios') !== -1){
+		const projectRoot = _context.opts.projectRoot;
+		const platformPath = path.join(projectRoot, 'platforms', 'ios');
+		const cordova_ios = require('cordova-ios');
+		const iosProject = new cordova_ios('ios', platformPath);
 
-	// if simple name-tag not found then try optional form of name tag with short name
-	if (!matches)
-		matches = config.match(new RegExp('<name short=".*?">(.*?)</name>', "i"));
+		return path.basename(iosProject.locations.xcodeCordovaProj);
+	}
+	// Valid matches
+	// '<name>Application one</name>',
+  // '<name short="App1">Application one</name>',
+  // '<name xmlns:widget="http://www.w3.org/ns/widgets">Application one</name>',
+	// '<name >Application one</name>',
+  // `<name
+  //  >Application one</name>`,
+	//
+	// Invalid matches
+	// '<name2>Application one</name>',
+  // '<namefoo>Application one</name>',
+  // '<name!!>Application one</name>',
+	const regExpression = "<name(?=[\\s>])[^>]*>(.*?)</name>";
+
+	var config = fs.readFileSync("config.xml").toString();
+	var matches = config.match(new RegExp(regExpression, "i"));
 
 	return (matches && matches[1]) || null;
 }
@@ -72,18 +91,26 @@ function writeLocalisationFieldsToXcodeProj(filePaths, groupName, proj) {
 			groupKey = localizableStringVarGroup.fileRef;
 		}
 
-		filePaths.forEach(function (path) {
+		filePaths.forEach(function (filePath) {
 			var results = _.find(fileRefValues, function (o) {
 				return (
 					_.isObject(o) &&
 					_.has(o, "path") &&
-					o.path.replace(/['"]+/g, "") === path
+					o.path.replace(/['"]+/g, "") === filePath
 				);
 			});
 			if (_.isUndefined(results)) {
 				// not found in pbxFileReference yet
+
+				// resource path used by cordova-ios 7.x and earlier
+				var resourcePath = "Resources/" + filePath;
+
+				// resource path used by cordova-ios 8.x and later
+				if (fs.existsSync(path.join("platforms", "ios", "App.xcodeproj"))) {
+					resourcePath = "App/Resources/" + filePath;
+				}
 				proj.addResourceFile(
-					"Resources/" + path,
+					resourcePath,
 					{ variantGroup: true },
 					groupKey
 				);
@@ -97,6 +124,8 @@ module.exports = function (context) {
 	var localizableStringsPaths = [];
 	var settingsBundlePaths = [];
 	var appShortcutsPaths = [];
+
+	_context = context;
 
 	return utils.getTargetLang(context).then(function (languages) {
 		languages.forEach(function (lang) {
@@ -222,10 +251,14 @@ module.exports = function (context) {
 					"platforms",
 					"ios"
 				);
-				var projectFileApi = require(path.join(
+				var projectFilePath = path.join(
 					platformPath,
 					"/cordova/lib/projectFile.js"
-				));
+				);
+				var projectFileExists = fs.existsSync(projectFilePath);
+
+				// Starting cordova-ios@7.0.0, projectFile.js is not part of the platform folder anymore and has to be grabbed from node_modules
+				var projectFileApi = projectFileExists ? require(projectFilePath) : require("cordova-ios/lib/projectFile");
 				projectFileApi.purgeProjectFileCache(platformPath);
 
 				resolve();
